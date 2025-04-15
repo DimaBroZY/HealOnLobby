@@ -1,17 +1,16 @@
 using UnityEngine;
-using Photon.Pun; // Нужно для PunRPC и PhotonMessageInfo
+using Photon.Pun;
 
 // Добавляем этот компонент к игроку, чтобы принимать RPC для лечения
-public class PlayerHealSync : MonoBehaviourPun // Наследуем от MonoBehaviourPun для удобства (хотя для RPC достаточно MonoBehaviour)
+public class PlayerHealSync : MonoBehaviourPun
 {
-    private PlayerAvatar playerAvatar; // Ссылка на основной скрипт аватара
-    private PlayerHealth playerHealth; // Ссылка на компонент здоровья
+    private PlayerAvatar playerAvatar;
+    private PlayerHealth playerHealth; // Предполагаем, что PlayerHealth тоже на этом объекте
 
     void Awake()
     {
-        // Получаем ссылки на нужные компоненты на этом же GameObject
         playerAvatar = GetComponent<PlayerAvatar>();
-        playerHealth = GetComponent<PlayerHealth>(); // Предполагаем, что PlayerHealth тоже на этом объекте
+        playerHealth = GetComponent<PlayerHealth>();
 
         if (playerAvatar == null)
         {
@@ -23,7 +22,6 @@ public class PlayerHealSync : MonoBehaviourPun // Наследуем от MonoBe
         }
     }
 
-    // Этот метод будет вызван через RPC
     [PunRPC]
     public void RPC_HealPlayer(int healAmount, PhotonMessageInfo info) // PhotonMessageInfo содержит инфо об отправителе
     {
@@ -39,12 +37,12 @@ public class PlayerHealSync : MonoBehaviourPun // Наследуем от MonoBe
         {
             var currentHealth = playerHealth.health;
             var maximumHealth = playerHealth.maxHealth;
-            // Убедимся, что лечим не больше максимума (на всякий случай)
+
             int actualHealAmount = Mathf.Min(healAmount, maximumHealth - currentHealth);
 
             if (actualHealAmount > 0)
             {
-                playerHealth.Heal(actualHealAmount, false); // Выполняем реальное лечение локально
+                playerHealth.Heal(actualHealAmount, false);
                 Debug.Log($"PlayerHealSync: Player '{playerAvatar?.playerName ?? gameObject.name}' received RPC and healed by {actualHealAmount}. Sender: {info.Sender.NickName}");
             }
             else

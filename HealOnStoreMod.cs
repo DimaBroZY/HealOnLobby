@@ -1,39 +1,53 @@
 using BepInEx;
 using HarmonyLib;
 using UnityEngine;
-using System.Collections.Generic; // Нужно для List<>
-using BepInEx.Logging; // Нужно для ManualLogSource
-using System; // Добавь это в начало файла, если еще не добавлено
+using System.Collections.Generic;
+using BepInEx.Logging;
+using System;
 using Photon.Pun;
-using Photon.Realtime; // <--- ДОБАВЬ ЭТО для доступа к ClientState
+using Photon.Realtime;
+using BepInEx.Configuration;
 
-// Изменяем ID, имя и версию плагина
-[BepInPlugin("com.example.healinlobby", "Heal In Lobby Mod", "1.0.0")]
+// Объявляет основные метаданные плагина для BepInEx
+[BepInPlugin("HealOnLobby", "Heal In Lobby Mod", "1.0.2")]
 public class HealInLobbyMod : BaseUnityPlugin
 {
-    // Статический логгер для доступа из других классов
     internal static ManualLogSource Log;
+
+    internal static ConfigEntry<bool> HealToMaxEnabled;
+    internal static ConfigEntry<int> HealAmount;
 
     void Awake()
     {
-        // Инициализируем статический логгер
         Log = Logger;
 
-        // Используем новый ID для Harmony
-        var harmony = new Harmony("com.example.healinlobby");
+        HealToMaxEnabled = Config.Bind(
+            "1. General",
+            "Heal To Max Health",
+            true,
+            "If true, players will be healed to their maximum health in the lobby, ignoring the 'Heal Amount' setting. If false, the specific 'Heal Amount' will be used."
+        );
+
+        HealAmount = Config.Bind(
+            "1. General",
+            "Heal Amount",
+            100,
+            "The amount of health to restore when entering the lobby. Only used if 'Heal To Max Health' is set to false. Healing will not exceed the player's maximum health."
+        );
+
+        var harmony = new Harmony("HealOnLobby"); // Используем новый GUID
         harmony.PatchAll();
-        Log.LogInfo("HealInLobbyMod loaded!"); // Обновляем сообщение в логе
+        Log.LogInfo("HealInLobbyMod loaded! Configuration loaded.");
     }
 }
 
-// Патчим метод ChangeLevel из класса RunManager
+// Патчит метод ChangeLevel из класса RunManager для выполнения логики при входе в лобби
 [HarmonyPatch(typeof(RunManager), "ChangeLevel")]
 public static class RunManager_ChangeLevel_Patch
 {
-    // Название RPC-метода, который мы БУДЕМ вызывать (и который нужно будет определить)
+    // Название RPC-метода для синхронизации лечения
     private const string HealRpcName = "RPC_HealPlayer";
 
-    // Postfix выполняется ПОСЛЕ оригинального метода ChangeLevel
     static void Postfix(RunManager __instance)
     {
         string currentLevelName = null;
@@ -41,33 +55,26 @@ public static class RunManager_ChangeLevel_Patch
 
         try
         {
-            // Получаем имя текущего (нового) уровня
-            if (__instance.levelCurrent != null)
+            if (__instance.levelCurrent == null)
             {
-                currentLevelName = __instance.levelCurrent.name;
-                // Оставляем этот лог, он полезен для отладки смены уровней
-                HealInLobbyMod.Log.LogInfo($"RunManager.ChangeLevel Postfix: Current level is '{currentLevelName}'");
-            }
-            else
-            {
-                 // Используем логгер нового класса
                  HealInLobbyMod.Log.LogWarning("RunManager.ChangeLevel Postfix: __instance.levelCurrent is null.");
                  return;
             }
+            currentLevelName = __instance.levelCurrent.name;
+            // Этот лог полезен для отладки смены уровней
+            HealInLobbyMod.Log.LogInfo($"RunManager.ChangeLevel Postfix: Current level is '{currentLevelName}'");
 
-            // Логируем состояние Photon ПЕРЕД проверкой
-            bool isMaster = PhotonNetwork.IsMasterClient;
-            ClientState clientState = PhotonNetwork.NetworkClientState;
-            HealInLobbyMod.Log.LogInfo($"Checking conditions: IsMasterClient={isMaster}, NetworkClientState={clientState}");
 
-            // Проверяем, является ли текущий уровень Лобби
             if (currentLevelName == targetLobbyName)
             {
-                // Выполняем лечение, если мы Мастер-клиент ИЛИ если клиент Photon только создан (одиночный режим)
+                bool isMaster = PhotonNetwork.IsMasterClient;
+                ClientState clientState = PhotonNetwork.NetworkClientState;
+                HealInLobbyMod.Log.LogInfo($"Checking conditions: IsMasterClient={isMaster}, NetworkClientState={clientState}");
+
+                // Выполняем лечение, если мы Мастер-клиент (хост) ИЛИ если клиент Photon только создан (вероятно, одиночный режим)
                 if (isMaster || clientState == ClientState.PeerCreated)
                 {
-                    // Мы либо хост в мультиплеере, либо в одиночке (судя по состоянию PeerCreated) - выполняем лечение
-                    HealInLobbyMod.Log.LogInfo($"Conditions met. Attempting to heal players via RPC...");
+                    HealInLobbyMod.Log.LogInfo($"Conditions met. Processing healing based on config...");
 
                     if (GameDirector.instance != null && GameDirector.instance.PlayerList != null)
                     {
@@ -77,78 +84,80 @@ public static class RunManager_ChangeLevel_Patch
                             {
                                 var currentHealth = player.playerHealth.health;
                                 var maximumHealth = player.playerHealth.maxHealth;
-                                int healAmount = maximumHealth - currentHealth;
+                                int desiredHealAmount = 0;
 
-                                if (healAmount > 0)
+                                bool healToMax = HealInLobbyMod.HealToMaxEnabled.Value;
+                                int specificHealAmount = HealInLobbyMod.HealAmount.Value;
+
+                                if (healToMax)
                                 {
-                                    // Получаем PhotonView из GameObject'а игрока
-                                    PhotonView pv = player.GetComponent<PhotonView>();
-                                    if (pv != null)
-                                    {
-                                        HealInLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with amount {healAmount}.");
-                                        // Отправляем RPC всем, включая себя (AllBuffered - сохранится для тех, кто подключится позже)
-                                        // RPC будет выполнен на экземпляре скрипта, который наблюдается этим PhotonView
-                                        pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmount);
-                                    }
-                                    else
-                                    {
-                                        HealInLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC. Healing might only work locally for host if applicable.");
-                                    }
+                                    desiredHealAmount = maximumHealth - currentHealth;
+                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': HealToMax is enabled. Calculated heal amount: {desiredHealAmount}");
                                 }
                                 else
                                 {
-                                    // Используем логгер нового класса
-                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' already at max health ({currentHealth}/{maximumHealth})");
+                                    desiredHealAmount = specificHealAmount;
+                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': HealToMax is disabled. Using configured heal amount: {desiredHealAmount}");
+                                }
+
+                                if (desiredHealAmount > 0 && currentHealth < maximumHealth)
+                                {
+                                    PhotonView pv = player.GetComponent<PhotonView>();
+                                    if (pv != null)
+                                    {
+                                        // Логика ограничения до макс. ХП будет на стороне получателя (в PlayerHealSync)
+                                        HealInLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with desired amount {desiredHealAmount}.");
+                                        pv.RPC(HealRpcName, RpcTarget.AllBuffered, desiredHealAmount);
+                                    }
+                                    else
+                                    {
+                                        HealInLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
+                                    }
+                                }
+                                else if (currentHealth >= maximumHealth)
+                                {
+                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' already at or above max health ({currentHealth}/{maximumHealth}). No heal needed.");
+                                }
+                                else
+                                {
+                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' calculated heal amount is zero or negative ({desiredHealAmount}). No heal needed.");
                                 }
                             }
                             else
                             {
-                                // Используем логгер нового класса
                                 HealInLobbyMod.Log.LogWarning("Found player in list, but they are null or have no PlayerHealth component.");
                             }
                         }
-                         // Используем логгер нового класса
-                         HealInLobbyMod.Log.LogInfo("Player healing RPC dispatch completed by Master Client / Single Player.");
+                         HealInLobbyMod.Log.LogInfo("Player healing RPC dispatch processing completed.");
                     }
                     else
                     {
-                        // Используем логгер нового класса
                         HealInLobbyMod.Log.LogWarning("Could not get player list (GameDirector.instance or GameDirector.instance.PlayerList is null).");
                     }
                 }
                 else
                 {
-                    // Мы клиент в мультиплеере (не хост) - пропускаем лечение
                     HealInLobbyMod.Log.LogInfo($"Conditions NOT met (IsMasterClient: {isMaster}, NetworkClientState: {clientState}). Skipping healing logic on this client.");
                 }
             }
-            // Этот лог можно убрать, если не нужен
-            /* else
-            {
-                 HealInLobbyMod.Log.LogInfo($"Current level ('{currentLevelName}') is not the target Lobby ('{targetLobbyName}'). No healing performed.");
-            }*/
         }
         catch (Exception ex)
         {
-            // Используем логгер нового класса
             HealInLobbyMod.Log.LogError($"Exception occurred in RunManager_ChangeLevel_Patch.Postfix: {ex}");
         }
-        // Этот лог тоже можно убрать, если не нужен
-        // HealInLobbyMod.Log.LogInfo("RunManager.ChangeLevel Postfix finished.");
     }
 }
 
-// Патчим метод Awake (или Start) в PlayerAvatar, чтобы добавить наш компонент и зарегистрировать его
-[HarmonyPatch(typeof(PlayerAvatar), "Awake")] // Или "Start", если Awake вызывает проблемы
+// Патчит метод Awake в PlayerAvatar, чтобы добавить наш компонент PlayerHealSync и зарегистрировать его в PhotonView
+[HarmonyPatch(typeof(PlayerAvatar), "Awake")] // Или "Start", если Awake вызывает проблемы с инициализацией
 public static class PlayerAvatar_Awake_Patch
 {
-    static void Postfix(PlayerAvatar __instance) // Выполняем ПОСЛЕ оригинального Awake
+    static void Postfix(PlayerAvatar __instance)
     {
         try
         {
-            GameObject playerGO = __instance.gameObject; // Получаем GameObject аватара
+            GameObject playerGO = __instance.gameObject;
 
-            // 1. Добавляем наш компонент синхронизации, если его еще нет
             PlayerHealSync healSync = playerGO.GetComponent<PlayerHealSync>();
             if (healSync == null)
             {
@@ -156,11 +165,9 @@ public static class PlayerAvatar_Awake_Patch
                 HealInLobbyMod.Log.LogInfo($"Added PlayerHealSync component to {playerGO.name}");
             }
 
-            // 2. Находим PhotonView
             PhotonView photonView = playerGO.GetComponent<PhotonView>();
             if (photonView != null)
             {
-                // 3. Проверяем и добавляем наш компонент в список наблюдаемых PhotonView
                 if (photonView.ObservedComponents == null)
                 {
                     // Если список null, создаем новый (маловероятно, но на всякий случай)
@@ -168,7 +175,6 @@ public static class PlayerAvatar_Awake_Patch
                      HealInLobbyMod.Log.LogWarning($"PhotonView on {playerGO.name} had null ObservedComponents. Initialized new list.");
                 }
 
-                // Проверяем, есть ли уже наш компонент в списке
                 bool alreadyObserved = false;
                 foreach (var observed in photonView.ObservedComponents)
                 {
@@ -179,18 +185,10 @@ public static class PlayerAvatar_Awake_Patch
                     }
                 }
 
-                // Если еще не наблюдается, добавляем
                 if (!alreadyObserved)
                 {
-                    // ВАЖНО: PhotonView.ObservedComponents ожидает список Component,
-                    // но часто наблюдаемые скрипты должны быть MonoBehaviour.
-                    // Убедимся, что PlayerHealSync наследуется от MonoBehaviour (он наследуется).
                     photonView.ObservedComponents.Add(healSync);
                     HealInLobbyMod.Log.LogInfo($"Added PlayerHealSync to PhotonView ObservedComponents on {playerGO.name}");
-                }
-                else
-                {
-                     // HealInLobbyMod.Log.LogInfo($"PlayerHealSync is already observed by PhotonView on {playerGO.name}");
                 }
             }
             else
