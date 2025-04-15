@@ -1,39 +1,20 @@
-name: Feature Request
-description: Suggest an idea for the mod
-title: "[Feature] "
-labels: enhancement
-assignees: ""
+---
+name: Feature request
+about: Suggest an idea for this project
+title: ''
+labels: ''
+assignees: ''
 
-body:
-  - type: markdown
-    attributes:
-      value: |
-        ### ✨ **Feature Idea**  
-        → What should the mod do? Be specific!  
-        *(Example: "Add a command /heal to manually restore health in the lobby.")*
+---
 
-  - type: textarea
-    attributes:
-      label: "**📌 What's the idea?**"
-      placeholder: |
-        - [ ] New command: `/heal [player]`  
-        - [ ] Config option to toggle auto-heal  
-    validations:
-      required: true
+**Is your feature request related to a problem? Please describe.**
+A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
-  - type: textarea
-    attributes:
-      label: "**❓ Why is it useful?**"
-      placeholder: |
-        - Fixes cases where auto-heal fails.  
-        - Lets admins control healing manually.  
-    validations:
-      required: false
+**Describe the solution you'd like**
+A clear and concise description of what you want to happen.
 
-  - type: textarea
-    attributes:
-      label: "**🎨 Mockups/Examples**"
-      description: "Link images or describe how it should look."
-      placeholder: |
-        - **Command example**: `/heal @DimaBroZY`  
-        - **Config example**: `autoHeal: true/false`  
+**Describe alternatives you've considered**
+A clear and concise description of any alternative solutions or features you've considered.
+
+**Additional context**
+Add any other context or screenshots about the feature request here.

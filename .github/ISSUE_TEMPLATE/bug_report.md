@@ -1,40 +1,38 @@
-name: Bug Report
-description: Report a problem with the mod
-title: "[Bug] "
-labels: bug
-assignees: ""
+---
+name: Bug report
+about: Create a report to help us improve
+title: ''
+labels: ''
+assignees: ''
 
-body:
-  - type: markdown
-    attributes:
-      value: |
-        ### 🐞 **Describe the Bug**  
-        → Clearly explain what went wrong and what you expected instead.  
-        *(Example: "Health doesn't restore in the lobby after taking damage on the server.")*
+---
 
-  - type: textarea
-    attributes:
-      label: "**📌 What happened?**"
-      placeholder: |
-        - [ ] Expected: Health should restore to 100% in lobby.
-        - [ ] Actual: Health stays at damaged level.
-    validations:
-      required: true
+**Describe the bug**
+A clear and concise description of what the bug is.
 
-  - type: textarea
-    attributes:
-      label: "**🛠 Steps to Reproduce**"
-      placeholder: |
-        1. Join a server.
-        2. Take damage (e.g., fall from height).
-        3. Return to the lobby.
-        4. Observe health bar.
-    validations:
-      required: true
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Go to '...'
+2. Click on '....'
+3. Scroll down to '....'
+4. See error
 
-  - type: input
-    attributes:
-      label: "**ℹ️ Mod Version**"
-      placeholder: "e.g., 1.2.0"
-    validations:
-      required: true
+**Expected behavior**
+A clear and concise description of what you expected to happen.
+
+**Screenshots**
+If applicable, add screenshots to help explain your problem.
+
+**Desktop (please complete the following information):**
+ - OS: [e.g. iOS]
+ - Browser [e.g. chrome, safari]
+ - Version [e.g. 22]
+
+**Smartphone (please complete the following information):**
+ - Device: [e.g. iPhone6]
+ - OS: [e.g. iOS8.1]
+ - Browser [e.g. stock browser, safari]
+ - Version [e.g. 22]
+
+**Additional context**
+Add any other context about the problem here.
