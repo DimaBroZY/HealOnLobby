@@ -1,43 +1,40 @@
----
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
-
----
-
 name: Bug Report
 description: Report a problem with the mod
 title: "[Bug] "
 labels: bug
-assignees: ''
+assignees: ""
 
 body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🐞 **Describe the Bug**  
+        → Clearly explain what went wrong and what you expected instead.  
+        *(Example: "Health doesn't restore in the lobby after taking damage on the server.")*
+
   - type: textarea
     attributes:
-      label: What happened?
-      description: Describe the bug and what you expected to happen.
+      label: "**📌 What happened?**"
+      placeholder: |
+        - [ ] Expected: Health should restore to 100% in lobby.
+        - [ ] Actual: Health stays at damaged level.
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: Steps to reproduce
-      description: Tell me how to trigger the bug step by step.
+      label: "**🛠 Steps to Reproduce**"
+      placeholder: |
+        1. Join a server.
+        2. Take damage (e.g., fall from height).
+        3. Return to the lobby.
+        4. Observe health bar.
     validations:
       required: true
 
   - type: input
     attributes:
-      label: Mod version
-      description: What version of HealOnLobby are you using?
+      label: "**ℹ️ Mod Version**"
+      placeholder: "e.g., 1.2.0"
     validations:
       required: true
-
-  - type: textarea
-    attributes:
-      label: Additional context
-      description: Any logs, screenshots, or notes that might help.
-    validations:
-      required: false
