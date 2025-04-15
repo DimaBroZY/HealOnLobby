@@ -1,43 +1,39 @@
----
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
-assignees: ''
-
----
-
-name: Bug Report
-description: Report a problem with the mod
-title: "[Bug] "
-labels: bug
-assignees: ''
+name: Feature Request
+description: Suggest an idea for the mod
+title: "[Feature] "
+labels: enhancement
+assignees: ""
 
 body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ✨ **Feature Idea**  
+        → What should the mod do? Be specific!  
+        *(Example: "Add a command /heal to manually restore health in the lobby.")*
+
   - type: textarea
     attributes:
-      label: What happened?
-      description: Describe the bug and what you expected to happen.
+      label: "**📌 What's the idea?**"
+      placeholder: |
+        - [ ] New command: `/heal [player]`  
+        - [ ] Config option to toggle auto-heal  
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: Steps to reproduce
-      description: Tell me how to trigger the bug step by step.
-    validations:
-      required: true
-
-  - type: input
-    attributes:
-      label: Mod version
-      description: What version of HealOnLobby are you using?
-    validations:
-      required: true
-
-  - type: textarea
-    attributes:
-      label: Additional context
-      description: Any logs, screenshots, or notes that might help.
+      label: "**❓ Why is it useful?**"
+      placeholder: |
+        - Fixes cases where auto-heal fails.  
+        - Lets admins control healing manually.  
     validations:
       required: false
+
+  - type: textarea
+    attributes:
+      label: "**🎨 Mockups/Examples**"
+      description: "Link images or describe how it should look."
+      placeholder: |
+        - **Command example**: `/heal @DimaBroZY`  
+        - **Config example**: `autoHeal: true/false`  
