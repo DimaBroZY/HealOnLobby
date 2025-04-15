@@ -1,27 +1,43 @@
-name: Feature Request
-description: Suggest an idea for the mod
-title: "[Feature] "
-labels: enhancement
+---
+name: Feature request
+about: Suggest an idea for this project
+title: ''
+labels: ''
+assignees: ''
+
+---
+
+name: Bug Report
+description: Report a problem with the mod
+title: "[Bug] "
+labels: bug
 assignees: ''
 
 body:
   - type: textarea
     attributes:
-      label: What's the idea?
-      description: Describe the feature you'd like to see.
+      label: What happened?
+      description: Describe the bug and what you expected to happen.
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: Why is it useful?
-      description: Explain why this feature would be helpful or improve the mod.
+      label: Steps to reproduce
+      description: Tell me how to trigger the bug step by step.
     validations:
-      required: false
+      required: true
+
+  - type: input
+    attributes:
+      label: Mod version
+      description: What version of HealOnLobby are you using?
+    validations:
+      required: true
 
   - type: textarea
     attributes:
       label: Additional context
-      description: Include mockups, examples, or anything else relevant.
+      description: Any logs, screenshots, or notes that might help.
     validations:
       required: false

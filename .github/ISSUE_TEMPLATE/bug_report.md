@@ -1,3 +1,12 @@
+---
+name: Bug report
+about: Create a report to help us improve
+title: ''
+labels: ''
+assignees: ''
+
+---
+
 name: Bug Report
 description: Report a problem with the mod
 title: "[Bug] "
