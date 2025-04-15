@@ -1,20 +1,27 @@
----
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+name: Feature Request
+description: Suggest an idea for the mod
+title: "[Feature] "
+labels: enhancement
 assignees: ''
 
----
+body:
+  - type: textarea
+    attributes:
+      label: What's the idea?
+      description: Describe the feature you'd like to see.
+    validations:
+      required: true
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+  - type: textarea
+    attributes:
+      label: Why is it useful?
+      description: Explain why this feature would be helpful or improve the mod.
+    validations:
+      required: false
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
-
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
-
-**Additional context**
-Add any other context or screenshots about the feature request here.
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Include mockups, examples, or anything else relevant.
+    validations:
+      required: false
