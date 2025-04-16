@@ -164,37 +164,6 @@ public static class PlayerAvatar_Awake_Patch
                 healSync = playerGO.AddComponent<PlayerHealSync>();
                 HealInLobbyMod.Log.LogInfo($"Added PlayerHealSync component to {playerGO.name}");
             }
-
-            PhotonView photonView = playerGO.GetComponent<PhotonView>();
-            if (photonView != null)
-            {
-                if (photonView.ObservedComponents == null)
-                {
-                    // Если список null, создаем новый (маловероятно, но на всякий случай)
-                     photonView.ObservedComponents = new List<Component>();
-                     HealInLobbyMod.Log.LogWarning($"PhotonView on {playerGO.name} had null ObservedComponents. Initialized new list.");
-                }
-
-                bool alreadyObserved = false;
-                foreach (var observed in photonView.ObservedComponents)
-                {
-                    if (observed is PlayerHealSync)
-                    {
-                        alreadyObserved = true;
-                        break;
-                    }
-                }
-
-                if (!alreadyObserved)
-                {
-                    photonView.ObservedComponents.Add(healSync);
-                    HealInLobbyMod.Log.LogInfo($"Added PlayerHealSync to PhotonView ObservedComponents on {playerGO.name}");
-                }
-            }
-            else
-            {
-                HealInLobbyMod.Log.LogWarning($"Could not find PhotonView on {playerGO.name} during PlayerAvatar.Awake patch.");
-            }
         }
         catch (Exception ex)
         {
