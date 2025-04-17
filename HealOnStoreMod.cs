@@ -8,44 +8,65 @@ using Photon.Pun;
 using Photon.Realtime;
 using BepInEx.Configuration;
 
-// Объявляет основные метаданные плагина для BepInEx
-[BepInPlugin("HealOnLobby", "Heal In Lobby Mod", "1.0.2")]
+// Declares the main plugin metadata for BepInEx
+[BepInPlugin("HealOnLobby", "Heal In Lobby Mod", "1.0.4")]
 public class HealInLobbyMod : BaseUnityPlugin
 {
     internal static ManualLogSource Log;
 
+    // Configuration settings
     internal static ConfigEntry<bool> HealToMaxEnabled;
+    internal static ConfigEntry<bool> HealByPercentEnabled;
+    internal static ConfigEntry<int> HealPercentAmount;
     internal static ConfigEntry<int> HealAmount;
 
     void Awake()
     {
         Log = Logger;
 
+        // 1. Heal to max health
         HealToMaxEnabled = Config.Bind(
             "1. General",
-            "Heal To Max Health",
+            "1. Heal To Max Health",
             true,
-            "If true, players will be healed to their maximum health in the lobby, ignoring the 'Heal Amount' setting. If false, the specific 'Heal Amount' will be used."
+            "Heal players to full health in the lobby. Overrides other settings if enabled."
         );
 
+        // 2. Heal by percentage
+        HealByPercentEnabled = Config.Bind(
+            "1. General",
+            "2. Heal By Percent Enabled",
+            false,
+            "Heal players by a percentage of their max health (if 'Heal To Max Health' is off)."
+        );
+        HealPercentAmount = Config.Bind(
+            "1. General",
+            "3. Heal Percent Amount",
+            50,
+            new ConfigDescription(
+                "The percentage (0-100) of max health to restore (used if 'Heal By Percent Enabled' is on).",
+                new AcceptableValueRange<int>(0, 100)
+            )
+        );
+
+        // 3. Heal by static amount
         HealAmount = Config.Bind(
             "1. General",
-            "Heal Amount",
+            "4. Heal Amount",
             100,
-            "The amount of health to restore when entering the lobby. Only used if 'Heal To Max Health' is set to false. Healing will not exceed the player's maximum health."
+            "Fixed amount of health to restore (used if both 'Heal To Max Health' and 'Heal By Percent Enabled' are off)."
         );
 
-        var harmony = new Harmony("HealOnLobby"); // Используем новый GUID
+        var harmony = new Harmony("HealOnLobby");
         harmony.PatchAll();
         Log.LogInfo("HealInLobbyMod loaded! Configuration loaded.");
     }
 }
 
-// Патчит метод ChangeLevel из класса RunManager для выполнения логики при входе в лобби
+// Patches the ChangeLevel method from RunManager class to execute logic upon entering the lobby
 [HarmonyPatch(typeof(RunManager), "ChangeLevel")]
 public static class RunManager_ChangeLevel_Patch
 {
-    // Название RPC-метода для синхронизации лечения
     private const string HealRpcName = "RPC_HealPlayer";
 
     static void Postfix(RunManager __instance)
@@ -61,9 +82,7 @@ public static class RunManager_ChangeLevel_Patch
                  return;
             }
             currentLevelName = __instance.levelCurrent.name;
-            // Этот лог полезен для отладки смены уровней
             HealInLobbyMod.Log.LogInfo($"RunManager.ChangeLevel Postfix: Current level is '{currentLevelName}'");
-
 
             if (currentLevelName == targetLobbyName)
             {
@@ -71,7 +90,6 @@ public static class RunManager_ChangeLevel_Patch
                 ClientState clientState = PhotonNetwork.NetworkClientState;
                 HealInLobbyMod.Log.LogInfo($"Checking conditions: IsMasterClient={isMaster}, NetworkClientState={clientState}");
 
-                // Выполняем лечение, если мы Мастер-клиент (хост) ИЛИ если клиент Photon только создан (вероятно, одиночный режим)
                 if (isMaster || clientState == ClientState.PeerCreated)
                 {
                     HealInLobbyMod.Log.LogInfo($"Conditions met. Processing healing based on config...");
@@ -84,43 +102,48 @@ public static class RunManager_ChangeLevel_Patch
                             {
                                 var currentHealth = player.playerHealth.health;
                                 var maximumHealth = player.playerHealth.maxHealth;
-                                int desiredHealAmount = 0;
+                                int healAmountToSend = 0;
 
                                 bool healToMax = HealInLobbyMod.HealToMaxEnabled.Value;
+                                bool healByPercent = HealInLobbyMod.HealByPercentEnabled.Value;
+                                int percentHealValue = HealInLobbyMod.HealPercentAmount.Value;
                                 int specificHealAmount = HealInLobbyMod.HealAmount.Value;
 
                                 if (healToMax)
                                 {
-                                    desiredHealAmount = maximumHealth - currentHealth;
-                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': HealToMax is enabled. Calculated heal amount: {desiredHealAmount}");
+                                    healAmountToSend = maximumHealth - currentHealth;
+                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 1 (HealToMax) enabled. Calculated heal amount: {healAmountToSend}");
+                                }
+                                else if (healByPercent)
+                                {
+                                    int healBasedOnPercent = Mathf.CeilToInt(maximumHealth * (percentHealValue / 100.0f));
+                                    healAmountToSend = Mathf.Min(healBasedOnPercent, maximumHealth - currentHealth);
+                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 2 (HealByPercent) enabled ({percentHealValue}%). Calculated heal amount: {healAmountToSend} (Raw percent heal: {healBasedOnPercent})");
                                 }
                                 else
                                 {
-                                    desiredHealAmount = specificHealAmount;
-                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': HealToMax is disabled. Using configured heal amount: {desiredHealAmount}");
+                                    healAmountToSend = Mathf.Min(specificHealAmount, maximumHealth - currentHealth);
+                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 3 (SpecificAmount) enabled. Calculated heal amount: {healAmountToSend} (Configured amount: {specificHealAmount})");
                                 }
 
-                                if (desiredHealAmount > 0 && currentHealth < maximumHealth)
+                                healAmountToSend = Mathf.Max(0, healAmountToSend);
+
+                                if (healAmountToSend > 0)
                                 {
                                     PhotonView pv = player.GetComponent<PhotonView>();
                                     if (pv != null)
                                     {
-                                        // Логика ограничения до макс. ХП будет на стороне получателя (в PlayerHealSync)
-                                        HealInLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with desired amount {desiredHealAmount}.");
-                                        pv.RPC(HealRpcName, RpcTarget.AllBuffered, desiredHealAmount);
+                                        HealInLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with final amount {healAmountToSend}.");
+                                        pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmountToSend);
                                     }
                                     else
                                     {
                                         HealInLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
                                     }
                                 }
-                                else if (currentHealth >= maximumHealth)
-                                {
-                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' already at or above max health ({currentHealth}/{maximumHealth}). No heal needed.");
-                                }
                                 else
                                 {
-                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' calculated heal amount is zero or negative ({desiredHealAmount}). No heal needed.");
+                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' needs no healing (Current: {currentHealth}/{maximumHealth}, Calculated Amount: {healAmountToSend}). No RPC sent.");
                                 }
                             }
                             else
@@ -148,8 +171,8 @@ public static class RunManager_ChangeLevel_Patch
     }
 }
 
-// Патчит метод Awake в PlayerAvatar, чтобы добавить наш компонент PlayerHealSync и зарегистрировать его в PhotonView
-[HarmonyPatch(typeof(PlayerAvatar), "Awake")] // Или "Start", если Awake вызывает проблемы с инициализацией
+// Patches the Awake method in PlayerAvatar to add our PlayerHealSync component
+[HarmonyPatch(typeof(PlayerAvatar), "Awake")]
 public static class PlayerAvatar_Awake_Patch
 {
     static void Postfix(PlayerAvatar __instance)
@@ -158,6 +181,8 @@ public static class PlayerAvatar_Awake_Patch
         {
             GameObject playerGO = __instance.gameObject;
 
+            // Ensure the PlayerHealSync component exists to receive RPCs
+            // PlayerHealSync class is now in PlayerHealSync.cs
             PlayerHealSync healSync = playerGO.GetComponent<PlayerHealSync>();
             if (healSync == null)
             {
