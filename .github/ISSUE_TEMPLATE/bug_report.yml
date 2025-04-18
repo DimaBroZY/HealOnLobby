@@ -1,0 +1,29 @@
+name: 🐞 Bug Report
+description: Report a problem with the mod
+title: "[BUG] "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the issue in detail
+      placeholder: "What happened?"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide steps to reproduce the issue
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mod Version
+      description: Specify the version of HealOnLobby
+      placeholder: "e.g., v1.0.5"
+    validations:
+      required: true
