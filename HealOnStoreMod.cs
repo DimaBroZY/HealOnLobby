@@ -7,10 +7,11 @@ using System;
 using Photon.Pun;
 using Photon.Realtime;
 using BepInEx.Configuration;
+using Random = UnityEngine.Random;
 
 // Declares the main plugin metadata for BepInEx
-[BepInPlugin("HealOnLobby", "Heal In Lobby Mod", "1.0.4")]
-public class HealInLobbyMod : BaseUnityPlugin
+[BepInPlugin("HealOnLobby", "Heal On Lobby Mod", "1.0.5")]
+public class HealOnLobbyMod : BaseUnityPlugin
 {
     internal static ManualLogSource Log;
 
@@ -19,6 +20,7 @@ public class HealInLobbyMod : BaseUnityPlugin
     internal static ConfigEntry<bool> HealByPercentEnabled;
     internal static ConfigEntry<int> HealPercentAmount;
     internal static ConfigEntry<int> HealAmount;
+    internal static ConfigEntry<int> HealChance;
 
     void Awake()
     {
@@ -57,9 +59,20 @@ public class HealInLobbyMod : BaseUnityPlugin
             "Fixed amount of health to restore (used if both 'Heal To Max Health' and 'Heal By Percent Enabled' are off)."
         );
 
+        // 2. Heal chance
+        HealChance = Config.Bind(
+            "2. Heal Chance",
+            "Heal Chance",
+            100,
+            new ConfigDescription(
+                "The chance (0-100) that healing will occur when entering the lobby. 100 means healing always happens (if conditions are met).",
+                new AcceptableValueRange<int>(0, 100)
+            )
+        );
+
         var harmony = new Harmony("HealOnLobby");
         harmony.PatchAll();
-        Log.LogInfo("HealInLobbyMod loaded! Configuration loaded.");
+        Log.LogInfo("HealOnLobbyMod loaded! Configuration loaded.");
     }
 }
 
@@ -78,21 +91,22 @@ public static class RunManager_ChangeLevel_Patch
         {
             if (__instance.levelCurrent == null)
             {
-                 HealInLobbyMod.Log.LogWarning("RunManager.ChangeLevel Postfix: __instance.levelCurrent is null.");
+                 HealOnLobbyMod.Log.LogWarning("RunManager.ChangeLevel Postfix: __instance.levelCurrent is null.");
                  return;
             }
             currentLevelName = __instance.levelCurrent.name;
-            HealInLobbyMod.Log.LogInfo($"RunManager.ChangeLevel Postfix: Current level is '{currentLevelName}'");
+            HealOnLobbyMod.Log.LogInfo($"RunManager.ChangeLevel Postfix: Current level is '{currentLevelName}'");
 
             if (currentLevelName == targetLobbyName)
             {
                 bool isMaster = PhotonNetwork.IsMasterClient;
                 ClientState clientState = PhotonNetwork.NetworkClientState;
-                HealInLobbyMod.Log.LogInfo($"Checking conditions: IsMasterClient={isMaster}, NetworkClientState={clientState}");
+                HealOnLobbyMod.Log.LogInfo($"Checking conditions: IsMasterClient={isMaster}, NetworkClientState={clientState}");
 
                 if (isMaster || clientState == ClientState.PeerCreated)
                 {
-                    HealInLobbyMod.Log.LogInfo($"Conditions met. Processing healing based on config...");
+                    HealOnLobbyMod.Log.LogInfo($"Conditions met. Processing healing based on config...");
+                    int healChanceValue = HealOnLobbyMod.HealChance.Value;
 
                     if (GameDirector.instance != null && GameDirector.instance.PlayerList != null)
                     {
@@ -104,69 +118,80 @@ public static class RunManager_ChangeLevel_Patch
                                 var maximumHealth = player.playerHealth.maxHealth;
                                 int healAmountToSend = 0;
 
-                                bool healToMax = HealInLobbyMod.HealToMaxEnabled.Value;
-                                bool healByPercent = HealInLobbyMod.HealByPercentEnabled.Value;
-                                int percentHealValue = HealInLobbyMod.HealPercentAmount.Value;
-                                int specificHealAmount = HealInLobbyMod.HealAmount.Value;
+                                bool healToMax = HealOnLobbyMod.HealToMaxEnabled.Value;
+                                bool healByPercent = HealOnLobbyMod.HealByPercentEnabled.Value;
+                                int percentHealValue = HealOnLobbyMod.HealPercentAmount.Value;
+                                int specificHealAmount = HealOnLobbyMod.HealAmount.Value;
 
                                 if (healToMax)
                                 {
                                     healAmountToSend = maximumHealth - currentHealth;
-                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 1 (HealToMax) enabled. Calculated heal amount: {healAmountToSend}");
+                                    HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 1 (HealToMax) enabled. Calculated heal amount: {healAmountToSend}");
                                 }
                                 else if (healByPercent)
                                 {
                                     int healBasedOnPercent = Mathf.CeilToInt(maximumHealth * (percentHealValue / 100.0f));
                                     healAmountToSend = Mathf.Min(healBasedOnPercent, maximumHealth - currentHealth);
-                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 2 (HealByPercent) enabled ({percentHealValue}%). Calculated heal amount: {healAmountToSend} (Raw percent heal: {healBasedOnPercent})");
+                                    HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 2 (HealByPercent) enabled ({percentHealValue}%). Calculated heal amount: {healAmountToSend} (Raw percent heal: {healBasedOnPercent})");
                                 }
                                 else
                                 {
                                     healAmountToSend = Mathf.Min(specificHealAmount, maximumHealth - currentHealth);
-                                    HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 3 (SpecificAmount) enabled. Calculated heal amount: {healAmountToSend} (Configured amount: {specificHealAmount})");
+                                    HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}': Priority 3 (SpecificAmount) enabled. Calculated heal amount: {healAmountToSend} (Configured amount: {specificHealAmount})");
                                 }
 
                                 healAmountToSend = Mathf.Max(0, healAmountToSend);
 
                                 if (healAmountToSend > 0)
                                 {
-                                    PhotonView pv = player.GetComponent<PhotonView>();
-                                    if (pv != null)
+                                    int randomRoll = Random.Range(1, 101);
+                                    bool healAllowedByChance = randomRoll <= healChanceValue;
+                                    HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}': Heal chance check: Rolled {randomRoll} vs Chance {healChanceValue}. Allowed: {healAllowedByChance}");
+
+                                    if (healAllowedByChance)
                                     {
-                                        HealInLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with final amount {healAmountToSend}.");
-                                        pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmountToSend);
+                                        PhotonView pv = player.GetComponent<PhotonView>();
+                                        if (pv != null)
+                                        {
+                                            HealOnLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with final amount {healAmountToSend}.");
+                                            pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmountToSend);
+                                        }
+                                        else
+                                        {
+                                            HealOnLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
+                                        }
                                     }
                                     else
                                     {
-                                        HealInLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
+                                        HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}' healing skipped due to chance ({randomRoll} > {healChanceValue}).");
                                     }
                                 }
                                 else
                                 {
-                                     HealInLobbyMod.Log.LogInfo($"Player '{player.playerName}' needs no healing (Current: {currentHealth}/{maximumHealth}, Calculated Amount: {healAmountToSend}). No RPC sent.");
+                                     HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}' needs no healing (Current: {currentHealth}/{maximumHealth}, Calculated Amount: {healAmountToSend}). No RPC sent, chance check skipped.");
                                 }
                             }
                             else
                             {
-                                HealInLobbyMod.Log.LogWarning("Found player in list, but they are null or have no PlayerHealth component.");
+                                HealOnLobbyMod.Log.LogWarning("Found player in list, but they are null or have no PlayerHealth component.");
                             }
                         }
-                         HealInLobbyMod.Log.LogInfo("Player healing RPC dispatch processing completed.");
+                         HealOnLobbyMod.Log.LogInfo("Player healing RPC dispatch processing completed.");
                     }
                     else
                     {
-                        HealInLobbyMod.Log.LogWarning("Could not get player list (GameDirector.instance or GameDirector.instance.PlayerList is null).");
+                        HealOnLobbyMod.Log.LogWarning("Could not get player list (GameDirector.instance or GameDirector.instance.PlayerList is null).");
                     }
                 }
                 else
                 {
-                    HealInLobbyMod.Log.LogInfo($"Conditions NOT met (IsMasterClient: {isMaster}, NetworkClientState: {clientState}). Skipping healing logic on this client.");
+                    HealOnLobbyMod.Log.LogInfo($"Conditions NOT met (IsMasterClient: {isMaster}, NetworkClientState: {clientState}). Skipping healing logic on this client.");
                 }
             }
         }
         catch (Exception ex)
         {
-            HealInLobbyMod.Log.LogError($"Exception occurred in RunManager_ChangeLevel_Patch.Postfix: {ex}");
+            HealOnLobbyMod.Log.LogError($"Exception occurred in RunManager_ChangeLevel_Patch.Postfix: {ex}");
         }
     }
 }
@@ -187,12 +212,12 @@ public static class PlayerAvatar_Awake_Patch
             if (healSync == null)
             {
                 healSync = playerGO.AddComponent<PlayerHealSync>();
-                HealInLobbyMod.Log.LogInfo($"Added PlayerHealSync component to {playerGO.name}");
+                HealOnLobbyMod.Log.LogInfo($"Added PlayerHealSync component to {playerGO.name}");
             }
         }
         catch (Exception ex)
         {
-            HealInLobbyMod.Log.LogError($"Exception in PlayerAvatar_Awake_Patch.Postfix: {ex}");
+            HealOnLobbyMod.Log.LogError($"Exception in PlayerAvatar_Awake_Patch.Postfix: {ex}");
         }
     }
 }
