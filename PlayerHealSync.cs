@@ -5,7 +5,7 @@ using Photon.Pun;
 public class PlayerHealSync : MonoBehaviourPun
 {
     private PlayerAvatar playerAvatar;
-    private PlayerHealth playerHealth; // Предполагаем, что PlayerHealth тоже на этом объекте
+    private PlayerHealth playerHealth; 
 
     void Awake()
     {
@@ -22,37 +22,45 @@ public class PlayerHealSync : MonoBehaviourPun
         }
     }
 
-    [PunRPC]
-    public void RPC_HealPlayer(int healAmount, PhotonMessageInfo info) // PhotonMessageInfo содержит инфо об отправителе
+    // Новый метод для прямого вызова лечения (в одиночном режиме)
+    public void HealLocally(int amountToHeal)
     {
-        // Проверка безопасности: Убедимся, что RPC пришел от Мастер-клиента
-        // Это важно, чтобы клиенты не могли сами себе отправлять команды на лечение
-        if (!info.Sender.IsMasterClient)
-        {
-            Debug.LogWarning($"PlayerHealSync: Received RPC_HealPlayer from non-MasterClient {info.Sender.NickName}. Ignoring.");
-            return;
-        }
-
         if (playerHealth != null)
         {
-            var currentHealth = playerHealth.health;
-            var maximumHealth = playerHealth.maxHealth;
+            int currentHealth = playerHealth.health;
+            int maxHealth = playerHealth.maxHealth;
+            // Ограничиваем лечение максимальным здоровьем
+            int actualHeal = Mathf.Min(amountToHeal, maxHealth - currentHealth);
 
-            int actualHealAmount = Mathf.Min(healAmount, maximumHealth - currentHealth);
-
-            if (actualHealAmount > 0)
+            if (actualHeal > 0)
             {
-                playerHealth.Heal(actualHealAmount, false);
-                Debug.Log($"PlayerHealSync: Player '{playerAvatar?.playerName ?? gameObject.name}' received RPC and healed by {actualHealAmount}. Sender: {info.Sender.NickName}");
+                playerHealth.Heal(actualHeal); // Вызываем метод лечения из игры
+                // Log using Debug.Log or your mod's logger if accessible
+                 Debug.Log($"PlayerHealSync: Healed locally by {actualHeal} (Requested: {amountToHeal}). New health: {playerHealth.health}/{maxHealth}");
+                 // HealOnLobbyMod.Log?.LogInfo($"PlayerHealSync: Healed locally by {actualHeal} (Requested: {amountToHeal}). New health: {playerHealth.health}/{maxHealth}");
+
             }
             else
             {
-                 Debug.Log($"PlayerHealSync: Player '{playerAvatar?.playerName ?? gameObject.name}' received RPC, but already at max health or heal amount is zero.");
+                 Debug.Log($"PlayerHealSync: Local heal called, but no actual healing needed (Requested: {amountToHeal}, Current: {currentHealth}/{maxHealth}).");
+                 // HealOnLobbyMod.Log?.LogInfo($"PlayerHealSync: Local heal called, but no actual healing needed (Requested: {amountToHeal}, Current: {currentHealth}/{maxHealth}).");
             }
         }
         else
         {
-            Debug.LogError($"PlayerHealSync: Received RPC_HealPlayer but PlayerHealth component is missing!");
+            Debug.LogError($"PlayerHealSync: HealLocally called, but PlayerHealth component is missing!");
+             // HealOnLobbyMod.Log?.LogError($"PlayerHealSync: HealLocally called, but PlayerHealth component is missing!");
         }
+    }
+
+    // RPC-метод для получения команды от хоста (в мультиплеере)
+    [PunRPC]
+    public void RPC_HealPlayer(int amountToHeal /* Убери PhotonMessageInfo, если он был, т.к. он не нужен при прямом вызове */)
+    {
+        // Просто вызываем локальную логику
+        // Проверка на MasterClient здесь больше не нужна, она делается перед отправкой RPC
+         Debug.Log($"PlayerHealSync: RPC_HealPlayer received with amount {amountToHeal}. Calling HealLocally.");
+         // HealOnLobbyMod.Log?.LogInfo($"PlayerHealSync: RPC_HealPlayer received with amount {amountToHeal}. Calling HealLocally.");
+        HealLocally(amountToHeal);
     }
 }

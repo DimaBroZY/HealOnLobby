@@ -10,7 +10,7 @@ using BepInEx.Configuration;
 using Random = UnityEngine.Random;
 
 // Declares the main plugin metadata for BepInEx
-[BepInPlugin("HealOnLobby", "Heal On Lobby Mod", "1.0.5")]
+[BepInPlugin("HealOnLobby", "Heal On Lobby Mod", "1.0.6")]
 public class HealOnLobbyMod : BaseUnityPlugin
 {
     internal static ManualLogSource Log;
@@ -150,15 +150,31 @@ public static class RunManager_ChangeLevel_Patch
 
                                     if (healAllowedByChance)
                                     {
-                                        PhotonView pv = player.GetComponent<PhotonView>();
-                                        if (pv != null)
+                                        if (isMaster)
                                         {
-                                            HealOnLobbyMod.Log.LogInfo($"Attempting to send RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with final amount {healAmountToSend}.");
-                                            pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmountToSend);
+                                            PhotonView pv = player.GetComponent<PhotonView>();
+                                            if (pv != null)
+                                            {
+                                                HealOnLobbyMod.Log.LogInfo($"Sending RPC '{HealRpcName}' for player '{player.playerName}' (ViewID: {pv.ViewID}) with final amount {healAmountToSend}.");
+                                                pv.RPC(HealRpcName, RpcTarget.AllBuffered, healAmountToSend);
+                                            }
+                                            else
+                                            {
+                                                HealOnLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
+                                            }
                                         }
-                                        else
+                                        else if (clientState == ClientState.PeerCreated)
                                         {
-                                            HealOnLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PhotonView component. Cannot send RPC.");
+                                            PlayerHealSync healSync = player.GetComponent<PlayerHealSync>();
+                                            if (healSync != null)
+                                            {
+                                                HealOnLobbyMod.Log.LogInfo($"Calling HealLocally directly for player '{player.playerName}' with amount {healAmountToSend}.");
+                                                healSync.HealLocally(healAmountToSend);
+                                            }
+                                            else
+                                            {
+                                                HealOnLobbyMod.Log.LogWarning($"Player '{player.playerName}' has no PlayerHealSync component. Cannot heal locally.");
+                                            }
                                         }
                                     }
                                     else
@@ -168,7 +184,7 @@ public static class RunManager_ChangeLevel_Patch
                                 }
                                 else
                                 {
-                                     HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}' needs no healing (Current: {currentHealth}/{maximumHealth}, Calculated Amount: {healAmountToSend}). No RPC sent, chance check skipped.");
+                                     HealOnLobbyMod.Log.LogInfo($"Player '{player.playerName}' needs no healing (Current: {currentHealth}/{maximumHealth}, Calculated Amount: {healAmountToSend}). No action taken.");
                                 }
                             }
                             else
@@ -176,7 +192,7 @@ public static class RunManager_ChangeLevel_Patch
                                 HealOnLobbyMod.Log.LogWarning("Found player in list, but they are null or have no PlayerHealth component.");
                             }
                         }
-                         HealOnLobbyMod.Log.LogInfo("Player healing RPC dispatch processing completed.");
+                         HealOnLobbyMod.Log.LogInfo("Player healing processing completed.");
                     }
                     else
                     {
